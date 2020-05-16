@@ -2,25 +2,35 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
-
-	"github.com/charlesyu108/spotify-cli/playback"
 )
 
 func main() {
 	argsWithoutProg := os.Args[1:]
+
+	// TODO: No command case
+
 	command := argsWithoutProg[0]
-
-	player := new(playback.SpotifyPlayer)
-
+	player := new(SpotifyPlayer)
 	output := "Command not understood."
+
 	switch command {
 
 	case "pp":
 		output = player.PlayPause()
 
 	case "play":
-		output = player.Play()
+		if len(argsWithoutProg) == 1 {
+			output = player.Play()
+		} else {
+			loadConfig()
+			getAuthToken()
+			searchArg := argsWithoutProg[1]
+			uri := search(searchArg)
+			log.Println(uri)
+			output = player.PlayResource(uri)
+		}
 
 	case "pause":
 		output = player.Pause()

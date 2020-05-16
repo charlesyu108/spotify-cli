@@ -1,5 +1,4 @@
-// Package playback manages the Spotify OSX Desktop Application Playback
-package playback
+package main
 
 import (
 	"fmt"
@@ -44,6 +43,15 @@ func (player *SpotifyPlayer) Pause() string {
 	return player.State()
 }
 
+// PlayResource plays the URI provided.
+func (player *SpotifyPlayer) PlayResource(uri string) string {
+	msg, err := executeJXACommand(formatString(playResourceTemplate, uri))
+	if err != nil {
+		return formatString("Error in playing specified URI %s: %s", uri, msg)
+	}
+	return formatString("%s.\n\n%s", player.State(), player.TrackInfo())
+}
+
 // PlayPause toggles the player's playback state.
 func (player *SpotifyPlayer) PlayPause() string {
 	msg, err := executeJXACommand(playPause)
@@ -75,6 +83,7 @@ func (player *SpotifyPlayer) PrevTrack() string {
 const play = "Application('Spotify').play()"
 const pause = "Application('Spotify').pause()"
 const playPause = "Application('Spotify').playpause()"
+const playResourceTemplate = "Application('Spotify').playTrack('%s')"
 const nextTrack = "Application('Spotify').nextTrack()"
 const previousTrack = "Application('Spotify').previousTrack()"
 const playbackState = "Application('Spotify').playerState()"

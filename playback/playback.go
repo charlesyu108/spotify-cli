@@ -7,67 +7,69 @@ import (
 	"strings"
 )
 
-type spotifyPlayback interface {
-	Play() string
-	Pause() string
-	PlayPause() string
-	NextTrack() string
-	PrevTrack() string
-}
+// SpotifyPlayer controls the Spotify OSX Desktop Application
+type SpotifyPlayer struct{}
 
 // State reports the player's current state.
-func State() string {
+func (player *SpotifyPlayer) State() string {
 	state, _ := executeJXACommand(playbackState)
-	status := formatString("Now %s", state[:len(state)-1])
+	status := formatString("Now %s", state)
 	return status
 }
 
 // TrackInfo reports information about the current track.
-func TrackInfo() string {
+func (player *SpotifyPlayer) TrackInfo() string {
 	title, _ := executeJXACommand(currentTrackName)
 	artist, _ := executeJXACommand(currentTrackArtist)
 	album, _ := executeJXACommand(currentTrackAlbum)
-
-	title = strings.TrimSpace(title)
-
-	info := formatString("%s FROM %s BY %s", title, album, artist)
+	info := formatString("[Track]: %s \n[Album]: %s \n[Artist]: %s", title, album, artist)
 	return info
 }
 
 // Play toggles the player to play music.
-func Play() string {
+func (player *SpotifyPlayer) Play() string {
 	msg, err := executeJXACommand(play)
 	if err != nil {
 		return formatString("Error in playing music: %s", msg)
 	}
-	return State()
+	return player.State()
 }
 
 // Pause toggles the player to pause music.
-func Pause() string {
+func (player *SpotifyPlayer) Pause() string {
 	msg, err := executeJXACommand(pause)
 	if err != nil {
 		return formatString("Error in pausing music: %s", msg)
 	}
-	return State()
+	return player.State()
 }
 
-// PlayPause toggles the player's Playback state.
-func PlayPause() string {
+// PlayPause toggles the player's playback state.
+func (player *SpotifyPlayer) PlayPause() string {
 	msg, err := executeJXACommand(playPause)
 	if err != nil {
 		return formatString("Error in toggling Play/Pause: %s", msg)
 	}
-	return formatString("%s: %s", State(), TrackInfo())
+	return formatString("%s.\n\n%s", player.State(), player.TrackInfo())
 }
 
-// func NextTrack() string {
-// 	msg, err := executeJXACommand(playPause)
-// 	if err != nil {
-// 		return formatString("Error in toggling Play/Pause: %s", msg)
-// 	}
-// 	return State()
-// }
+// NextTrack advances the player to a new track.
+func (player *SpotifyPlayer) NextTrack() string {
+	msg, err := executeJXACommand(nextTrack)
+	if err != nil {
+		return formatString("Error in skipping to next track: %s", msg)
+	}
+	return player.TrackInfo()
+}
+
+// PrevTrack advances the player to a new track.
+func (player *SpotifyPlayer) PrevTrack() string {
+	msg, err := executeJXACommand(previousTrack)
+	if err != nil {
+		return formatString("Error in skipping to previous track: %s", msg)
+	}
+	return player.TrackInfo()
+}
 
 // Define JXA commands
 const play = "Application('Spotify').play()"

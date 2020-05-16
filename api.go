@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -43,11 +44,9 @@ func getAuthToken() {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, _ := client.Do(req)
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
 
 	var payload map[string]interface{}
-	json.Unmarshal(body, &payload)
+	json.NewDecoder(resp.Body).Decode(&payload)
 
 	config.AccessToken = payload["access_token"].(string)
 }
@@ -84,4 +83,16 @@ func search(q string) string {
 	}
 	return ""
 
+}
+
+func processRedirect(w http.ResponseWriter, req *http.Request) {
+	fmt.Println(req)
+}
+
+func authorizeUser() {
+	//display url
+	authUrl := formatString(`https://accounts.spotify.com/authorize?client_id=%s&response_type=code&redirect_uri=http://localhost:4567&scope=user-read-playback-state,user-modify-playback-state`, config.ClientID)
+	log.Println(authUrl)
+	http.HandleFunc("/", processRedirect)
+	http.ListenAndServe(":4567", nil)
 }

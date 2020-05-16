@@ -17,6 +17,11 @@ func main() {
 
 	switch command {
 
+	case "auth":
+		loadConfig()
+		getAuthToken()
+		authorizeUser()
+
 	case "pp":
 		output = player.PlayPause()
 

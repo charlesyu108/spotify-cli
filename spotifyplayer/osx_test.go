@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func player() *OSXSpotifyPlayer {
-	cfg := new(configT)
+func player() *OSXPlayer {
+	cfg := new(ConfigT)
 	return NewOSXPlayer(cfg)
 }
 

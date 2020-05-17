@@ -11,10 +11,18 @@ type SpotifyPlayer interface {
 	PrevTrack() string
 }
 
-// NewOSXPlayer creates a new OSXSpotifyPlayer from the passed in config
-func NewOSXPlayer(config *configT) *OSXSpotifyPlayer {
-	player := new(OSXSpotifyPlayer)
+// NewOSXPlayer creates a new OSXPlayer from the passed in config
+func NewOSXPlayer(config *ConfigT) *OSXPlayer {
+	player := new(OSXPlayer)
 	player.Config = config
 	player.Config.PlayerType = "OSX"
+	return player
+}
+
+// NewWebPlayer creates a new WebPlayer from the passed in config
+func NewWebPlayer(config *ConfigT) *WebPlayer {
+	player := new(WebPlayer)
+	player.Config = config
+	player.Config.PlayerType = "Web"
 	return player
 }

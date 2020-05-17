@@ -6,13 +6,13 @@ import (
 	"github.com/charlesyu108/spotify-cli/utils"
 )
 
-// OSXSpotifyPlayer controls the Spotify OSX Desktop Application
-type OSXSpotifyPlayer struct {
-	Config *configT
+// OSXPlayer controls the Spotify OSX Desktop Application
+type OSXPlayer struct {
+	Config *ConfigT
 }
 
 // State reports the player's current state.
-func (player *OSXSpotifyPlayer) State() string {
+func (player *OSXPlayer) State() string {
 	state, err := executeJXACommand(playbackState)
 	utils.Check(err)
 	status := utils.FormatString("Now %s", state)
@@ -20,7 +20,7 @@ func (player *OSXSpotifyPlayer) State() string {
 }
 
 // TrackInfo reports information about the current track.
-func (player *OSXSpotifyPlayer) TrackInfo() string {
+func (player *OSXPlayer) TrackInfo() string {
 	title, _ := executeJXACommand(currentTrackName)
 	artist, _ := executeJXACommand(currentTrackArtist)
 	album, _ := executeJXACommand(currentTrackAlbum)
@@ -29,7 +29,7 @@ func (player *OSXSpotifyPlayer) TrackInfo() string {
 }
 
 // Play toggles the player to play music.
-func (player *OSXSpotifyPlayer) Play() string {
+func (player *OSXPlayer) Play() string {
 	msg, err := executeJXACommand(play)
 	if err != nil {
 		return utils.FormatString("Error in playing music: %s", msg)
@@ -38,7 +38,7 @@ func (player *OSXSpotifyPlayer) Play() string {
 }
 
 // Pause toggles the player to pause music.
-func (player *OSXSpotifyPlayer) Pause() string {
+func (player *OSXPlayer) Pause() string {
 	msg, err := executeJXACommand(pause)
 	if err != nil {
 		return utils.FormatString("Error in pausing music: %s", msg)
@@ -47,7 +47,7 @@ func (player *OSXSpotifyPlayer) Pause() string {
 }
 
 // PlayResource plays the URI provided.
-func (player *OSXSpotifyPlayer) PlayResource(uri string) string {
+func (player *OSXPlayer) PlayResource(uri string) string {
 	msg, err := executeJXACommand(utils.FormatString(playResourceTemplate, uri))
 	if err != nil {
 		return utils.FormatString("Error in playing specified URI %s: %s", uri, msg)
@@ -56,7 +56,7 @@ func (player *OSXSpotifyPlayer) PlayResource(uri string) string {
 }
 
 // PlayPause toggles the player's playback state.
-func (player *OSXSpotifyPlayer) PlayPause() string {
+func (player *OSXPlayer) PlayPause() string {
 	msg, err := executeJXACommand(playPause)
 	if err != nil {
 		return utils.FormatString("Error in toggling Play/Pause: %s", msg)
@@ -65,7 +65,7 @@ func (player *OSXSpotifyPlayer) PlayPause() string {
 }
 
 // NextTrack advances the player to a new track.
-func (player *OSXSpotifyPlayer) NextTrack() string {
+func (player *OSXPlayer) NextTrack() string {
 	msg, err := executeJXACommand(nextTrack)
 	if err != nil {
 		return utils.FormatString("Error in skipping to next track: %s", msg)
@@ -74,7 +74,7 @@ func (player *OSXSpotifyPlayer) NextTrack() string {
 }
 
 // PrevTrack advances the player to a new track.
-func (player *OSXSpotifyPlayer) PrevTrack() string {
+func (player *OSXPlayer) PrevTrack() string {
 	msg, err := executeJXACommand(previousTrack)
 	if err != nil {
 		return utils.FormatString("Error in skipping to previous track: %s", msg)

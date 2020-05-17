@@ -17,13 +17,13 @@ func cleanup() {
 func TestConfigSaveAndLoad(t *testing.T) {
 	t.Cleanup(cleanup)
 
-	c1 := configT{
+	c1 := ConfigT{
 		RedirectURI: "abcd",
 		PlayerType:  "123",
 	}
 	c1.Save(testFile)
 
-	d1 := configT{}
+	d1 := ConfigT{}
 	d1.Load(testFile)
 	if d1 != c1 {
 		t.FailNow()

@@ -3,15 +3,21 @@ package spotifyplayer
 import (
 	"encoding/json"
 	"io/ioutil"
-
-	"github.com/charlesyu108/spotify-cli/utils"
 )
+
+// GetConfig either loads an existing config in or creates a new one
+func GetConfig() *ConfigT {
+	cfg := new(ConfigT)
+	_ = cfg.Load(DefaultConfigFile)
+	return cfg
+}
 
 // DefaultConfigFile is the default file read
 // and save configs to.
-const DefaultConfigFile = "config.json"
+const DefaultConfigFile = "../config.json"
 
-type configT struct {
+// ConfigT is the type for a Config
+type ConfigT struct {
 	PlayerType string
 
 	// WebPlayer Only
@@ -23,18 +29,30 @@ type configT struct {
 }
 
 // Load loads the configuration file into c.
-func (c *configT) Load(file string) {
+func (c *ConfigT) Load(file string) error {
 	fileContent, err := ioutil.ReadFile(file)
-	utils.Check(err)
-
+	if err != nil {
+		return err
+	}
 	err = json.Unmarshal(fileContent, c)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Save saves the configuration defined by c to file.
-func (c *configT) Save(file string) {
+func (c *ConfigT) Save(file string) error {
 	serialized, err := json.Marshal(c)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+
 	err = ioutil.WriteFile(file, serialized, 0644)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

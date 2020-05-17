@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewOSXPlayer(t *testing.T) {
-	mockConfig := configT{}
+	mockConfig := ConfigT{}
 	player := NewOSXPlayer(&mockConfig)
 
 	if player.Config.PlayerType != "OSX" {

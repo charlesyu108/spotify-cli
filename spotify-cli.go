@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"github.com/charlesyu108/spotify-cli/player"
+)
 
 func main() {
-	fmt.Println("Hello")
+	defaultConfig := "config.json"
+	spotify := player.NewSpotify(defaultConfig)
+	spotify.Authorize()
+	spotify.Play()
+	player.SaveConfig(spotify.Config, defaultConfig)
 }

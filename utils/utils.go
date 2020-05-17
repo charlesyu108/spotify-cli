@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -29,4 +31,23 @@ func FormatString(template string, strs ...string) string {
 		trimmed[idx] = strings.TrimSpace(s)
 	}
 	return fmt.Sprintf(template, trimmed...)
+}
+
+// OpenInBrowser opens a url in the default browser
+// Source: https://gist.github.com/hyg/9c4afcd91fe24316cbf0
+func OpenInBrowser(url string) error {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+
+	return err
 }

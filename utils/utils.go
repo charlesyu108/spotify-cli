@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -71,4 +72,18 @@ func SaveJSON(fileName string, v interface{}) error {
 		return err
 	}
 	return json.NewEncoder(file).Encode(v)
+}
+
+// MakeHTTPRequest wraps http.NewRequest and client.Do to perform a request
+func MakeHTTPRequest(method string, URL string, headers map[string]string, formData url.Values) (*http.Response, error) {
+	client := new(http.Client)
+	if formData == nil {
+		formData = url.Values{}
+	}
+	req, _ := http.NewRequest(method, URL, strings.NewReader(formData.Encode()))
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return client.Do(req)
 }

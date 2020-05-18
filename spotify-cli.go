@@ -1,12 +1,29 @@
 package main
 
 import (
-	"github.com/charlesyu108/spotify-cli/player"
+	"fmt"
+	"os"
+
+	"github.com/charlesyu108/spotify-cli/spotify"
 )
 
+// ConfigFile defines which config JSON file to load
+const ConfigFile = "config.json"
+
 func main() {
-	defaultConfig := "config.json"
-	spotify := player.NewSpotify(defaultConfig)
-	spotify.Authorize()
-	spotify.Play()
+
+	args := os.Args[1:]
+
+	Spotify := spotify.New(ConfigFile)
+	Spotify.Authorize()
+
+	switch cmd := args[0]; cmd {
+	case "play":
+		Spotify.Play()
+	case "pause":
+		Spotify.Pause()
+	case "devices":
+		fmt.Println(Spotify.GetDevices())
+	}
+
 }

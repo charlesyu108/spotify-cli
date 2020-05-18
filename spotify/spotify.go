@@ -1,4 +1,4 @@
-package player
+package spotify
 
 import (
 	"encoding/base64"
@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/charlesyu108/spotify-cli/utils"
@@ -27,7 +26,8 @@ func handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
 	userAuthCodeChan <- userCode
 }
 
-func NewSpotify(configFile string) Spotify {
+// New produces creates and initializes a new Spotify
+func New(configFile string) Spotify {
 	cfg := LoadConfig(configFile)
 	spotify := Spotify{Config: cfg, tokens: new(tokensT)}
 
@@ -62,18 +62,18 @@ type Spotify struct {
 //
 // NOTE: If the tokens are properly saved, they will cache authorization credentials
 // to make this process more seamless.
-func (player *Spotify) Authorize() {
-	player.loadSavedTokens()
-	defer player.saveTokens()
+func (spotify *Spotify) Authorize() {
+	spotify.loadSavedTokens()
+	defer spotify.saveTokens()
 
-	tokens := player.tokens
+	tokens := spotify.tokens
 	appClient, access, refresh := tokens.AppAccessToken, tokens.UserAccessToken, tokens.UserRefreshToken
 	unixTimeNow := time.Now().Unix()
 	appTokExpired, uTokExpired := unixTimeNow > tokens.AppTokenExpiration, unixTimeNow > tokens.UserTokenExpiration
 
 	// Always want to make sure our App Client is authorized
 	if appTokExpired || appClient == "" {
-		player.acquireTokens("", "client")
+		spotify.acquireTokens("", "client")
 	}
 
 	// Case: user has existing tokens
@@ -83,27 +83,27 @@ func (player *Spotify) Authorize() {
 
 	// Case: Existing user but tokens expired, refresh
 	if uTokExpired && refresh != "" {
-		player.acquireTokens(refresh, "refresh")
+		spotify.acquireTokens(refresh, "refresh")
 		return
 	}
 
 	// Case: New user - getting new auth and refresh tokens
-	authCode := player.authorizeUser()
-	player.acquireTokens(authCode, "auth")
+	authCode := spotify.authorizeUser()
+	spotify.acquireTokens(authCode, "auth")
 }
 
-func (player *Spotify) loadSavedTokens() {
-	utils.LoadJSON(tokenFile, player.tokens)
+func (spotify *Spotify) loadSavedTokens() {
+	utils.LoadJSON(tokenFile, spotify.tokens)
 }
 
-func (player *Spotify) saveTokens() {
-	err := utils.SaveJSON(tokenFile, player.tokens)
+func (spotify *Spotify) saveTokens() {
+	err := utils.SaveJSON(tokenFile, spotify.tokens)
 	utils.Check(err)
 }
 
-func (player *Spotify) acquireTokens(code string, tokenType string) {
+func (spotify *Spotify) acquireTokens(code string, tokenType string) {
 	URL := "https://accounts.spotify.com/api/token"
-	appIdentity := []byte(player.Config.AppClientID + ":" + player.Config.AppClientSecret)
+	appIdentity := []byte(spotify.Config.AppClientID + ":" + spotify.Config.AppClientSecret)
 	headers := map[string]string{
 		"Authorization": "Basic " + base64.StdEncoding.EncodeToString(appIdentity),
 		"Content-Type":  "application/x-www-form-urlencoded",
@@ -117,18 +117,18 @@ func (player *Spotify) acquireTokens(code string, tokenType string) {
 	case "auth":
 		form.Set("grant_type", "authorization_code")
 		form.Set("code", code)
-		form.Set("redirect_uri", "http://localhost:"+player.Config.RedirectPort)
+		form.Set("redirect_uri", "http://localhost:"+spotify.Config.RedirectPort)
 
 	case "refresh":
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", code)
-		form.Set("redirect_uri", "http://localhost:"+player.Config.RedirectPort)
+		form.Set("redirect_uri", "http://localhost:"+spotify.Config.RedirectPort)
 
 	default:
 		log.Fatalf("Bad value provided for tokenType arg to acquireTokens")
 	}
 
-	resp, _ := makeRequest("POST", URL, headers, form)
+	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, form)
 	var payload map[string]string
 	json.NewDecoder(resp.Body).Decode(&payload)
 
@@ -136,71 +136,91 @@ func (player *Spotify) acquireTokens(code string, tokenType string) {
 	switch tokenType {
 	case "client":
 		if clientTok, ok := payload["access_token"]; ok {
-			player.tokens.AppAccessToken = clientTok
-			player.tokens.AppTokenExpiration = expiration
+			spotify.tokens.AppAccessToken = clientTok
+			spotify.tokens.AppTokenExpiration = expiration
 		}
 	// Same logic otherwise
 	default:
 		if userTok, ok := payload["access_token"]; ok {
-			player.tokens.UserAccessToken = userTok
-			player.tokens.UserTokenExpiration = expiration
+			spotify.tokens.UserAccessToken = userTok
+			spotify.tokens.UserTokenExpiration = expiration
 		}
 		if refreshTok, ok := payload["refresh_token"]; ok {
-			player.tokens.UserRefreshToken = refreshTok
+			spotify.tokens.UserRefreshToken = refreshTok
 		}
 	}
 }
 
-func (player *Spotify) authorizeUser() string {
+func (spotify *Spotify) authorizeUser() string {
 	authURL := utils.FormatString(
-		"https://accounts.spotify.com/authorize?"+
-			"client_id=%s&"+
-			"response_type=code&"+
-			"redirect_uri=%s&"+
+		"https://accounts.spotify.com/authorize?client_id=%s&"+
+			"response_type=code&redirect_uri=%s&"+
 			"scope=user-read-playback-state,user-modify-playback-state",
-		player.Config.AppClientID,
-		"http://localhost:"+player.Config.RedirectPort,
+		spotify.Config.AppClientID,
+		"http://localhost:"+spotify.Config.RedirectPort,
 	)
 	fmt.Printf("\nPlease navigate to this URL to Authorize Spotify:\n\n%s\n", authURL)
 	_ = utils.OpenInBrowser(authURL)
+	// Block while waiting for authorization code to be received
+	// by redirect handler
 	userAuthCode := <-userAuthCodeChan
 	return userAuthCode
 }
 
-func (player *Spotify) Play() {
-	URL := "https://api.spotify.com/v1/me/player/play"
+func (spotify *Spotify) Play() {
+	URL := utils.FormatString(
+		"https://api.spotify.com/v1/me/player/play?device_id=%s",
+		spotify.activeOrFirstDevice().ID,
+	)
 	headers := map[string]string{
-		"Authorization": "Bearer " + player.tokens.UserAccessToken,
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, err := makeRequest("PUT", URL, headers, nil)
-	utils.Check(err)
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, nil)
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
-	fmt.Println(payload)
+	// TODO err handling
 }
 
-func (player *Spotify) Pause() {
-	client := new(http.Client)
-	const URL = "https://api.spotify.com/v1/me/player/pause"
-	req, _ := http.NewRequest("PUT", URL, nil)
-	fmt.Println("\n\n\n" + player.tokens.UserAccessToken)
-	req.Header.Set("Authorization", "Bearer "+player.tokens.UserAccessToken)
-	resp, err := client.Do(req)
-	utils.Check(err)
+func (spotify *Spotify) Pause() {
+	URL := "https://api.spotify.com/v1/me/player/pause"
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, nil)
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
-	fmt.Println(payload)
+	// TODO err handling
 }
 
-func makeRequest(method string, URL string, headers map[string]string, formData url.Values) (*http.Response, error) {
-	client := new(http.Client)
-	if formData == nil {
-		formData = url.Values{}
-	}
-	req, _ := http.NewRequest(method, URL, strings.NewReader(formData.Encode()))
+type Device struct {
+	ID           string `json:"id"`
+	IsActive     bool   `json:"is_active"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	IsRestricted bool   `json:"is_restricted"`
+}
 
-	for k, v := range headers {
-		req.Header.Set(k, v)
+func (spotify *Spotify) GetDevices() []Device {
+	URL := "https://api.spotify.com/v1/me/player/devices"
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	return client.Do(req)
+	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, nil)
+	var payload struct {
+		Devices []Device `json:"devices"`
+	}
+	json.NewDecoder(resp.Body).Decode(&payload)
+	return payload.Devices
+}
+
+// Return the active device. If no active, return the first.
+func (spotify *Spotify) activeOrFirstDevice() Device {
+	devices := spotify.GetDevices()
+	chosen := devices[0]
+	for i := range devices {
+		if devices[i].IsActive {
+			chosen = devices[i]
+		}
+	}
+	return chosen
 }

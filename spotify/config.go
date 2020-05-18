@@ -1,4 +1,4 @@
-package player
+package spotify
 
 import (
 	"github.com/charlesyu108/spotify-cli/utils"

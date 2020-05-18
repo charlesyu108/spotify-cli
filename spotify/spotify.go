@@ -192,6 +192,28 @@ func (spotify *Spotify) Pause() {
 	// TODO err handling
 }
 
+func (spotify *Spotify) NextTrack() {
+	URL := "https://api.spotify.com/v1/me/player/next"
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, nil)
+	var payload map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&payload)
+	// TODO err handling
+}
+
+func (spotify *Spotify) PreviousTrack() {
+	URL := "https://api.spotify.com/v1/me/player/previous"
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, nil)
+	var payload map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&payload)
+	// TODO err handling
+}
+
 type Device struct {
 	ID           string `json:"id"`
 	IsActive     bool   `json:"is_active"`
@@ -211,6 +233,33 @@ func (spotify *Spotify) GetDevices() []Device {
 	}
 	json.NewDecoder(resp.Body).Decode(&payload)
 	return payload.Devices
+}
+
+type Track struct {
+	Album struct {
+		Name string `json:"name"`
+	} `json:"album"`
+	Name    string `json:"name"`
+	URI     string `json:"uri"`
+	Artists []struct {
+		Name string `json:"name"`
+	} `json:"artists"`
+}
+
+type StateInfo struct {
+	IsPlaying bool  `json:"is_playing"`
+	Track     Track `json:"item"`
+}
+
+func (spotify *Spotify) CurrentState() StateInfo {
+	URL := "https://api.spotify.com/v1/me/player/currently-playing"
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, nil)
+	var payload StateInfo
+	json.NewDecoder(resp.Body).Decode(&payload)
+	return payload
 }
 
 // Return the active device. If no active, return the first.

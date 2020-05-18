@@ -22,8 +22,14 @@ func main() {
 		Spotify.Play()
 	case "pause":
 		Spotify.Pause()
+	case "next":
+		Spotify.NextTrack()
+	case "prev":
+		Spotify.PreviousTrack()
 	case "devices":
 		fmt.Println(Spotify.GetDevices())
+	case "info":
+		fmt.Println(Spotify.CurrentState())
 	}
 
 }

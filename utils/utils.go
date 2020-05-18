@@ -1,9 +1,11 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -50,4 +52,23 @@ func OpenInBrowser(url string) error {
 	}
 
 	return err
+}
+
+// LoadJSON loads the file into the struct defined by v.
+func LoadJSON(fileName string, v interface{}) error {
+	file, err := os.OpenFile(fileName, os.O_RDONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+
+	return json.NewDecoder(file).Decode(v)
+}
+
+// SaveJSON saves the struct defined by v to the file
+func SaveJSON(fileName string, v interface{}) error {
+	file, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(file).Encode(v)
 }

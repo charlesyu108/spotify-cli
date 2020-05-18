@@ -9,5 +9,4 @@ func main() {
 	spotify := player.NewSpotify(defaultConfig)
 	spotify.Authorize()
 	spotify.Play()
-	player.SaveConfig(spotify.Config, defaultConfig)
 }

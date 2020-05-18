@@ -13,8 +13,7 @@ import (
 	"github.com/charlesyu108/spotify-cli/utils"
 )
 
-type ISpotify interface {
-}
+const tokenFile = ".tokens"
 
 var userAuthCodeChan = make(chan string)
 
@@ -30,7 +29,7 @@ func handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
 
 func NewSpotify(configFile string) Spotify {
 	cfg := LoadConfig(configFile)
-	spotify := Spotify{Config: cfg}
+	spotify := Spotify{Config: cfg, tokens: new(tokensT)}
 
 	// Creating a Server for handling user Auth requests
 	http.HandleFunc("/", handleAuthorizeUserRedirect)
@@ -44,84 +43,112 @@ func NewSpotify(configFile string) Spotify {
 	return spotify
 }
 
+type tokensT struct {
+	AppAccessToken      string
+	UserAccessToken     string
+	UserRefreshToken    string
+	UserTokenExpiration int64
+	AppTokenExpiration  int64
+}
+
 type Spotify struct {
 	Config     *ConfigT
 	authServer *http.Server
+	tokens     *tokensT
 }
 
+// Authorize performs the required client and user authorization steps for
+// the app to work properly.
+//
+// NOTE: If the tokens are properly saved, they will cache authorization credentials
+// to make this process more seamless.
 func (player *Spotify) Authorize() {
-	tokens := player.Config.Tokens
-	if tokens.AppAccessToken == "" {
-		player.authorizeClient()
+	player.loadSavedTokens()
+	defer player.saveTokens()
+
+	tokens := player.tokens
+	appClient, access, refresh := tokens.AppAccessToken, tokens.UserAccessToken, tokens.UserRefreshToken
+	unixTimeNow := time.Now().Unix()
+	appTokExpired, uTokExpired := unixTimeNow > tokens.AppTokenExpiration, unixTimeNow > tokens.UserTokenExpiration
+
+	// Always want to make sure our App Client is authorized
+	if appTokExpired || appClient == "" {
+		player.acquireTokens("", "client")
 	}
 
-	access, refresh := tokens.UserAccessToken, tokens.UserRefreshToken
-	expired := time.Now().Unix() < tokens.UserTokenExpiration
-
-	if !expired && access != "" {
+	// Case: user has existing tokens
+	if !uTokExpired && access != "" {
 		return
 	}
 
-	if expired && refresh != "" {
-		player.exchangeUserCodeForAccessTokens(refresh)
+	// Case: Existing user but tokens expired, refresh
+	if uTokExpired && refresh != "" {
+		player.acquireTokens(refresh, "refresh")
 		return
 	}
 
+	// Case: New user - getting new auth and refresh tokens
 	authCode := player.authorizeUser()
-	player.exchangeUserCodeForAccessTokens(authCode)
+	player.acquireTokens(authCode, "auth")
 }
 
-func (player *Spotify) authorizeClient() {
-	client := new(http.Client)
-	data := url.Values{}
-	data.Set("grant_type", "client_credentials")
-	const appAuthURL = "https://accounts.spotify.com/api/token"
-	req, _ := http.NewRequest("POST", appAuthURL, strings.NewReader(data.Encode()))
-	appIdentity := []byte(player.Config.AppClientID + ":" + player.Config.AppClientSecret)
-	b64encode := base64.StdEncoding.EncodeToString(appIdentity)
-	req.Header.Set("Authorization", "Basic "+b64encode)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+func (player *Spotify) loadSavedTokens() {
+	utils.LoadJSON(tokenFile, player.tokens)
+}
 
-	resp, err := client.Do(req)
+func (player *Spotify) saveTokens() {
+	err := utils.SaveJSON(tokenFile, player.tokens)
 	utils.Check(err)
-	var payload map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&payload)
-
-	if resp.StatusCode != 200 {
-		log.Panicf(
-			"While performing Authorization, received Status Code: %d. Message %s",
-			resp.StatusCode,
-			payload,
-		)
-	}
-	player.Config.Tokens.AppAccessToken = payload["access_token"].(string)
 }
 
-func (player *Spotify) exchangeUserCodeForAccessTokens(code string) (string, string) {
-	client := new(http.Client)
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("code", code)
-	data.Set("redirect_uri", "http://localhost:"+player.Config.RedirectPort)
-
-	const appAuthURL = "https://accounts.spotify.com/api/token"
-	req, _ := http.NewRequest("POST", appAuthURL, strings.NewReader(data.Encode()))
+func (player *Spotify) acquireTokens(code string, tokenType string) {
+	URL := "https://accounts.spotify.com/api/token"
 	appIdentity := []byte(player.Config.AppClientID + ":" + player.Config.AppClientSecret)
-	b64encode := base64.StdEncoding.EncodeToString(appIdentity)
-	req.Header.Set("Authorization", "Basic "+b64encode)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	headers := map[string]string{
+		"Authorization": "Basic " + base64.StdEncoding.EncodeToString(appIdentity),
+		"Content-Type":  "application/x-www-form-urlencoded",
+	}
+	form := url.Values{}
 
-	resp, err := client.Do(req)
-	utils.CheckHTTPResponse(resp, err, "Failure in exchanging user auth code for tokens.")
+	switch tokenType {
+	case "client":
+		form.Set("grant_type", "client_credentials")
 
-	var payload map[string]interface{}
+	case "auth":
+		form.Set("grant_type", "authorization_code")
+		form.Set("code", code)
+		form.Set("redirect_uri", "http://localhost:"+player.Config.RedirectPort)
+
+	case "refresh":
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", code)
+		form.Set("redirect_uri", "http://localhost:"+player.Config.RedirectPort)
+
+	default:
+		log.Fatalf("Bad value provided for tokenType arg to acquireTokens")
+	}
+
+	resp, _ := makeRequest("POST", URL, headers, form)
+	var payload map[string]string
 	json.NewDecoder(resp.Body).Decode(&payload)
-	access_token, refresh_token := payload["access_token"].(string), payload["refresh_token"].(string)
 
-	player.Config.Tokens.UserRefreshToken = refresh_token
-	player.Config.Tokens.UserAccessToken = access_token
-
-	return access_token, refresh_token
+	expiration := time.Now().Unix() + int64(3600)
+	switch tokenType {
+	case "client":
+		if clientTok, ok := payload["access_token"]; ok {
+			player.tokens.AppAccessToken = clientTok
+			player.tokens.AppTokenExpiration = expiration
+		}
+	// Same logic otherwise
+	default:
+		if userTok, ok := payload["access_token"]; ok {
+			player.tokens.UserAccessToken = userTok
+			player.tokens.UserTokenExpiration = expiration
+		}
+		if refreshTok, ok := payload["refresh_token"]; ok {
+			player.tokens.UserRefreshToken = refreshTok
+		}
+	}
 }
 
 func (player *Spotify) authorizeUser() string {
@@ -137,17 +164,15 @@ func (player *Spotify) authorizeUser() string {
 	fmt.Printf("\nPlease navigate to this URL to Authorize Spotify:\n\n%s\n", authURL)
 	_ = utils.OpenInBrowser(authURL)
 	userAuthCode := <-userAuthCodeChan
-
 	return userAuthCode
 }
 
 func (player *Spotify) Play() {
-	client := new(http.Client)
-	const URL = "https://api.spotify.com/v1/me/player/play"
-	req, _ := http.NewRequest("PUT", URL, nil)
-	fmt.Println("\n\n\n" + player.Config.Tokens.UserAccessToken)
-	req.Header.Set("Authorization", "Bearer "+player.Config.Tokens.UserAccessToken)
-	resp, err := client.Do(req)
+	URL := "https://api.spotify.com/v1/me/player/play"
+	headers := map[string]string{
+		"Authorization": "Bearer " + player.tokens.UserAccessToken,
+	}
+	resp, err := makeRequest("PUT", URL, headers, nil)
 	utils.Check(err)
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
@@ -158,11 +183,24 @@ func (player *Spotify) Pause() {
 	client := new(http.Client)
 	const URL = "https://api.spotify.com/v1/me/player/pause"
 	req, _ := http.NewRequest("PUT", URL, nil)
-	fmt.Println("\n\n\n" + player.Config.Tokens.UserAccessToken)
-	req.Header.Set("Authorization", "Bearer "+player.Config.Tokens.UserAccessToken)
+	fmt.Println("\n\n\n" + player.tokens.UserAccessToken)
+	req.Header.Set("Authorization", "Bearer "+player.tokens.UserAccessToken)
 	resp, err := client.Do(req)
 	utils.Check(err)
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
 	fmt.Println(payload)
+}
+
+func makeRequest(method string, URL string, headers map[string]string, formData url.Values) (*http.Response, error) {
+	client := new(http.Client)
+	if formData == nil {
+		formData = url.Values{}
+	}
+	req, _ := http.NewRequest(method, URL, strings.NewReader(formData.Encode()))
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return client.Do(req)
 }

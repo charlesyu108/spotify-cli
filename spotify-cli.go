@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/charlesyu108/spotify-cli/spotify"
 )
@@ -20,6 +21,15 @@ func main() {
 	switch cmd := args[0]; cmd {
 	case "play":
 		Spotify.Play()
+	case "play-on":
+		search := strings.ToLower(args[1])
+		for _, device := range Spotify.GetDevices() {
+			name, t := strings.ToLower(device.Name), strings.ToLower(device.Type)
+			if strings.Contains(name, search) || strings.Contains(t, search) {
+				Spotify.PlayOn(device)
+				break
+			}
+		}
 	case "pause":
 		Spotify.Pause()
 	case "next":

@@ -167,10 +167,10 @@ func (spotify *Spotify) authorizeUser() string {
 	return userAuthCode
 }
 
-func (spotify *Spotify) Play() {
+func (spotify *Spotify) PlayOn(device Device) {
 	URL := utils.FormatString(
 		"https://api.spotify.com/v1/me/player/play?device_id=%s",
-		spotify.activeOrFirstDevice().ID,
+		device.ID,
 	)
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
@@ -179,6 +179,12 @@ func (spotify *Spotify) Play() {
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
 	// TODO err handling
+
+}
+
+func (spotify *Spotify) Play() {
+	device := spotify.activeOrFirstDevice()
+	spotify.PlayOn(device)
 }
 
 func (spotify *Spotify) Pause() {

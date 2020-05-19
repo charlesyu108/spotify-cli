@@ -13,42 +13,11 @@ import (
 	"github.com/charlesyu108/spotify-cli/utils"
 )
 
+// tokenFile defines where Tokens should be cached.
 const tokenFile = ".tokens"
 
-var authServer = struct {
-	userAuthCodeChan chan string
-	server           *http.Server
-}{
-	userAuthCodeChan: make(chan string),
-}
-
-func handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
-	userCode := req.FormValue("code")
-	if userCode != "" {
-		w.Write([]byte("Success!"))
-	} else {
-		w.Write([]byte("User Authorization failed"))
-	}
-	authServer.userAuthCodeChan <- userCode
-}
-
-// New produces creates and initializes a new Spotify
-func New(configFile string) Spotify {
-	cfg := LoadConfig(configFile)
-	spotify := Spotify{Config: cfg, tokens: new(tokensT)}
-
-	// Creating a Server for handling user Auth requests
-	http.HandleFunc("/", handleAuthorizeUserRedirect)
-	authServer.server = &http.Server{
-		Addr:    ":" + spotify.Config.RedirectPort,
-		Handler: http.DefaultServeMux,
-	}
-	// Start auth server
-	go authServer.server.ListenAndServe()
-
-	return spotify
-}
-
+// tokensT defines tokens and related info
+// for interfacing with the Spotify API
 type tokensT struct {
 	AppAccessToken      string
 	UserAccessToken     string
@@ -57,9 +26,49 @@ type tokensT struct {
 	AppTokenExpiration  int64
 }
 
+// authT defines a struct that encapsulates all resources
+// required to obtain Authorization credentials
+type authT struct {
+	codeChan chan string
+	server   *http.Server
+}
+
+// Spotify represents an interface to the Spotify API
 type Spotify struct {
 	Config *ConfigT
 	tokens *tokensT
+	auth   *authT
+}
+
+// New produces creates and initializes a new Spotify
+func New(configFile string) Spotify {
+	cfg := LoadConfig(configFile)
+	spotify := Spotify{Config: cfg, tokens: new(tokensT)}
+	spotify.auth = &authT{
+		codeChan: make(chan string),
+		server: &http.Server{
+			Addr:    ":" + spotify.Config.RedirectPort,
+			Handler: http.DefaultServeMux,
+		},
+	}
+	// Register Auth Redirect Handler
+	http.HandleFunc("/", spotify.handleAuthorizeUserRedirect)
+	// Start auth server
+	go spotify.auth.server.ListenAndServe()
+
+	return spotify
+}
+
+// handleAuthorizeUserRedirect is the HTTP Handler that listens for activity on the
+// local authorization server & extracts the obtained user access token for OAuth.
+func (spotify *Spotify) handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
+	userCode := req.FormValue("code")
+	if userCode != "" {
+		w.Write([]byte("Success!"))
+	} else {
+		w.Write([]byte("User Authorization failed"))
+	}
+	spotify.auth.codeChan <- userCode
 }
 
 // Authorize performs the required client and user authorization steps for
@@ -97,15 +106,19 @@ func (spotify *Spotify) Authorize() {
 	spotify.acquireTokens(authCode, "auth")
 }
 
+// loadSavedTokens loads the cached tokens file (if it exists) into memory
 func (spotify *Spotify) loadSavedTokens() {
 	utils.LoadJSON(tokenFile, spotify.tokens)
 }
 
+// saveTokens saves the current tokens to a cached tokens file
 func (spotify *Spotify) saveTokens() {
 	err := utils.SaveJSON(tokenFile, spotify.tokens)
 	utils.Check(err)
 }
 
+// acquireTokens exchanges AppClient or User AuthCode/Refresh tokens for
+// access tokens that can be used to make Spotify API calls.
 func (spotify *Spotify) acquireTokens(code string, tokenType string) {
 	URL := "https://accounts.spotify.com/api/token"
 	appIdentity := []byte(spotify.Config.AppClientID + ":" + spotify.Config.AppClientSecret)
@@ -160,6 +173,8 @@ func (spotify *Spotify) acquireTokens(code string, tokenType string) {
 	}
 }
 
+// authorizeUser prompts the user to authorize his or her account
+// and waits until the authServer has received and extracted the authCode.
 func (spotify *Spotify) authorizeUser() string {
 	authURL := utils.FormatString(
 		"https://accounts.spotify.com/authorize?client_id=%s&"+
@@ -172,10 +187,30 @@ func (spotify *Spotify) authorizeUser() string {
 	_ = utils.OpenInBrowser(authURL)
 	// Block while waiting for authorization code to be received
 	// by redirect handler
-	userAuthCode := <-authServer.userAuthCodeChan
+	userAuthCode := <-spotify.auth.codeChan
 	return userAuthCode
 }
 
+// SpotifyURI defines a reference to a playable Spotify resource
+type SpotifyURI string
+
+// Play starts/resumes playing music on the active device, if one exists. If not it
+// tries to play on the first device that it comes across from the Devices API.
+// NOTE: Play will return a 403 Forbbiden if Spotify already playing.
+func (spotify *Spotify) Play() {
+	device := spotify.activeOrFirstDevice()
+	URL := utils.FormatString(
+		"https://api.spotify.com/v1/me/player/play?device_id=%s",
+		device.ID,
+	)
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
+	handlePlaybackAPIErrorScenarios("Play", resp)
+}
+
+// PlayOnDevice starts/resumes playing music on the target device provided.
 func (spotify *Spotify) PlayOnDevice(device Device) {
 	URL := "https://api.spotify.com/v1/me/player/"
 	body := utils.FormatString(
@@ -191,19 +226,8 @@ func (spotify *Spotify) PlayOnDevice(device Device) {
 	handlePlaybackAPIErrorScenarios("PlayOnDevice", resp)
 }
 
-func (spotify *Spotify) Play() {
-	device := spotify.activeOrFirstDevice()
-	URL := utils.FormatString(
-		"https://api.spotify.com/v1/me/player/play?device_id=%s",
-		device.ID,
-	)
-	headers := map[string]string{
-		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
-	}
-	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
-	handlePlaybackAPIErrorScenarios("Play", resp)
-}
-
+// PlayURI starts playing the specified URI on the active device, if one exists. If not it
+// tries to play on the first device that it comes across from the Devices API.
 func (spotify *Spotify) PlayURI(uri SpotifyURI) {
 	device := spotify.activeOrFirstDevice()
 	body := utils.FormatString(`{"uris":["%s"]}`, string(uri))
@@ -218,6 +242,8 @@ func (spotify *Spotify) PlayURI(uri SpotifyURI) {
 	handlePlaybackAPIErrorScenarios("PlayURI", resp)
 }
 
+// Pause pauses playing music on any device.
+// NOTE: Pause will return a 403 Forbbiden if Spotify not already playing.
 func (spotify *Spotify) Pause() {
 	URL := "https://api.spotify.com/v1/me/player/pause"
 	headers := map[string]string{
@@ -227,6 +253,7 @@ func (spotify *Spotify) Pause() {
 	handlePlaybackAPIErrorScenarios("Pause", resp)
 }
 
+// NextTrack skips to the next track.
 func (spotify *Spotify) NextTrack() {
 	URL := "https://api.spotify.com/v1/me/player/next"
 	headers := map[string]string{
@@ -236,6 +263,7 @@ func (spotify *Spotify) NextTrack() {
 	handlePlaybackAPIErrorScenarios("NextTrack", resp)
 }
 
+// PreviousTrack skips to the last track.
 func (spotify *Spotify) PreviousTrack() {
 	URL := "https://api.spotify.com/v1/me/player/previous"
 	headers := map[string]string{
@@ -245,6 +273,7 @@ func (spotify *Spotify) PreviousTrack() {
 	handlePlaybackAPIErrorScenarios("PreviousTrack", resp)
 }
 
+// Device describes a device
 type Device struct {
 	ID           string `json:"id"`
 	IsActive     bool   `json:"is_active"`
@@ -253,6 +282,7 @@ type Device struct {
 	IsRestricted bool   `json:"is_restricted"`
 }
 
+// GetDevices returns all devices players
 func (spotify *Spotify) GetDevices() []Device {
 	URL := "https://api.spotify.com/v1/me/player/devices"
 	headers := map[string]string{
@@ -266,12 +296,13 @@ func (spotify *Spotify) GetDevices() []Device {
 	return payload.Devices
 }
 
-type SpotifyURI string
-
-func (spotify *Spotify) SimpleSearch(q string, type_ string) SpotifyURI {
+// SimpleSearch returns the first URI that matches the query string for the given
+// resource type.
+// NOTE `Type` must be one of { 'track', 'album', 'artist', 'playlist', 'show', 'episode' }
+func (spotify *Spotify) SimpleSearch(q string, Type string) SpotifyURI {
 	base, query := "https://api.spotify.com/v1/search", url.Values{}
 	query.Set("q", q)
-	query.Set("type", type_)
+	query.Set("type", Type)
 	query.Set("limit", "1")
 	URL := utils.FormatString("%s?%s", base, query.Encode())
 	headers := map[string]string{
@@ -285,12 +316,13 @@ func (spotify *Spotify) SimpleSearch(q string, type_ string) SpotifyURI {
 	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
 	json.NewDecoder(resp.Body).Decode(&payload)
 
-	if data, ok := payload[type_+"s"]; ok {
+	if data, ok := payload[Type+"s"]; ok {
 		return data.Items[0].Uri
 	}
 	return ""
 }
 
+// Track describes a track
 type Track struct {
 	Album struct {
 		Name string `json:"name"`
@@ -301,11 +333,14 @@ type Track struct {
 		Name string `json:"name"`
 	} `json:"artists"`
 }
+
+// StateInfo describes the current state of the Spotify playback
 type StateInfo struct {
 	IsPlaying bool  `json:"is_playing"`
 	Track     Track `json:"item"`
 }
 
+// CurrentState fetches the current state of the Spotify playback
 func (spotify *Spotify) CurrentState() StateInfo {
 	URL := "https://api.spotify.com/v1/me/player/currently-playing"
 	headers := map[string]string{
@@ -317,7 +352,7 @@ func (spotify *Spotify) CurrentState() StateInfo {
 	return payload
 }
 
-// Return the active device. If no active, return the first.
+// activeOrFirstDevice returns the active device. If no active, return the first.
 func (spotify *Spotify) activeOrFirstDevice() Device {
 	devices := spotify.GetDevices()
 	chosen := devices[0]
@@ -329,6 +364,8 @@ func (spotify *Spotify) activeOrFirstDevice() Device {
 	return chosen
 }
 
+// handlePlaybackAPIErrorScenarios handles HTTP response code error scenarios for
+// the Spotify Player API methods.
 func handlePlaybackAPIErrorScenarios(operation string, r *http.Response) {
 	switch r.StatusCode {
 	case 204:

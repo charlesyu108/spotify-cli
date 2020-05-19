@@ -15,7 +15,12 @@ import (
 
 const tokenFile = ".tokens"
 
-var userAuthCodeChan = make(chan string)
+var authServer = struct {
+	userAuthCodeChan chan string
+	server           *http.Server
+}{
+	userAuthCodeChan: make(chan string),
+}
 
 func handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
 	userCode := req.FormValue("code")
@@ -24,7 +29,7 @@ func handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
 	} else {
 		w.Write([]byte("User Authorization failed"))
 	}
-	userAuthCodeChan <- userCode
+	authServer.userAuthCodeChan <- userCode
 }
 
 // New produces creates and initializes a new Spotify
@@ -34,12 +39,12 @@ func New(configFile string) Spotify {
 
 	// Creating a Server for handling user Auth requests
 	http.HandleFunc("/", handleAuthorizeUserRedirect)
-	spotify.authServer = &http.Server{
+	authServer.server = &http.Server{
 		Addr:    ":" + spotify.Config.RedirectPort,
 		Handler: http.DefaultServeMux,
 	}
 	// Start auth server
-	go spotify.authServer.ListenAndServe()
+	go authServer.server.ListenAndServe()
 
 	return spotify
 }
@@ -53,9 +58,8 @@ type tokensT struct {
 }
 
 type Spotify struct {
-	Config     *ConfigT
-	authServer *http.Server
-	tokens     *tokensT
+	Config *ConfigT
+	tokens *tokensT
 }
 
 // Authorize performs the required client and user authorization steps for
@@ -168,7 +172,7 @@ func (spotify *Spotify) authorizeUser() string {
 	_ = utils.OpenInBrowser(authURL)
 	// Block while waiting for authorization code to be received
 	// by redirect handler
-	userAuthCode := <-userAuthCodeChan
+	userAuthCode := <-authServer.userAuthCodeChan
 	return userAuthCode
 }
 

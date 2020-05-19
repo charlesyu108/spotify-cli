@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/charlesyu108/spotify-cli/utils"
@@ -179,7 +180,7 @@ func (spotify *Spotify) authorizeUser() string {
 	authURL := utils.FormatString(
 		"https://accounts.spotify.com/authorize?client_id=%s&"+
 			"response_type=code&redirect_uri=%s&"+
-			"scope=user-read-playback-state,user-modify-playback-state",
+			"scope=user-read-playback-state,user-modify-playback-state,user-read-currently-playing",
 		spotify.Config.AppClientID,
 		"http://localhost:"+spotify.Config.RedirectPort,
 	)
@@ -230,7 +231,12 @@ func (spotify *Spotify) PlayOnDevice(device Device) {
 // tries to play on the first device that it comes across from the Devices API.
 func (spotify *Spotify) PlayURI(uri SpotifyURI) {
 	device := spotify.activeOrFirstDevice()
-	body := utils.FormatString(`{"uris":["%s"]}`, string(uri))
+	// By default use the URI as a context_uri.
+	body := utils.FormatString(`{"context_uri":"%s"}`, string(uri))
+	// If URI is a track, different kind of body
+	if strings.HasPrefix(string(uri), "spotify:track") {
+		body = utils.FormatString(`{"uris":["%s"]}`, string(uri))
+	}
 	URL := utils.FormatString(
 		"https://api.spotify.com/v1/me/player/play?device_id=%s",
 		device.ID,

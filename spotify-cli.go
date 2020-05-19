@@ -26,7 +26,7 @@ func main() {
 		for _, device := range Spotify.GetDevices() {
 			name, t := strings.ToLower(device.Name), strings.ToLower(device.Type)
 			if strings.Contains(name, search) || strings.Contains(t, search) {
-				Spotify.PlayOn(device)
+				Spotify.PlayOnDevice(device)
 				break
 			}
 		}
@@ -40,6 +40,14 @@ func main() {
 		fmt.Println(Spotify.GetDevices())
 	case "info":
 		fmt.Println(Spotify.CurrentState())
+	case "find":
+		fmt.Println(Spotify.SimpleSearch(args[1], "track"))
+	case "play-track":
+		track := Spotify.SimpleSearch(args[1], "track")
+		if track != "" {
+			Spotify.PlayURI(track)
+		}
+
 	}
 
 }

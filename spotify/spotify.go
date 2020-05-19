@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -129,6 +130,10 @@ func (spotify *Spotify) acquireTokens(code string, tokenType string) {
 	}
 
 	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, form.Encode())
+	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		log.Fatalf("Error encountered during Authorization. INFO: %s", body)
+	}
 	var payload map[string]string
 	json.NewDecoder(resp.Body).Decode(&payload)
 
@@ -167,7 +172,7 @@ func (spotify *Spotify) authorizeUser() string {
 	return userAuthCode
 }
 
-func (spotify *Spotify) PlayOn(device Device) {
+func (spotify *Spotify) PlayOnDevice(device Device) {
 	URL := "https://api.spotify.com/v1/me/player/"
 	body := utils.FormatString(
 		`{"device_ids":["%s"], "play":true}`,
@@ -179,9 +184,7 @@ func (spotify *Spotify) PlayOn(device Device) {
 		"Content-Type":  "application/json",
 	}
 	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, body)
-	var payload map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&payload)
-	// TODO err handling
+	handlePlaybackAPIErrorScenarios("PlayOnDevice", resp)
 }
 
 func (spotify *Spotify) Play() {
@@ -194,8 +197,21 @@ func (spotify *Spotify) Play() {
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
 	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
-	var payload map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&payload)
+	handlePlaybackAPIErrorScenarios("Play", resp)
+}
+
+func (spotify *Spotify) PlayURI(uri SpotifyURI) {
+	device := spotify.activeOrFirstDevice()
+	body := utils.FormatString(`{"uris":["%s"]}`, string(uri))
+	URL := utils.FormatString(
+		"https://api.spotify.com/v1/me/player/play?device_id=%s",
+		device.ID,
+	)
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, body)
+	handlePlaybackAPIErrorScenarios("PlayURI", resp)
 }
 
 func (spotify *Spotify) Pause() {
@@ -204,9 +220,7 @@ func (spotify *Spotify) Pause() {
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
 	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
-	var payload map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&payload)
-	// TODO err handling
+	handlePlaybackAPIErrorScenarios("Pause", resp)
 }
 
 func (spotify *Spotify) NextTrack() {
@@ -215,9 +229,7 @@ func (spotify *Spotify) NextTrack() {
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
 	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, "")
-	var payload map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&payload)
-	// TODO err handling
+	handlePlaybackAPIErrorScenarios("NextTrack", resp)
 }
 
 func (spotify *Spotify) PreviousTrack() {
@@ -226,9 +238,7 @@ func (spotify *Spotify) PreviousTrack() {
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
 	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, "")
-	var payload map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&payload)
-	// TODO err handling
+	handlePlaybackAPIErrorScenarios("PreviousTrack", resp)
 }
 
 type Device struct {
@@ -252,17 +262,41 @@ func (spotify *Spotify) GetDevices() []Device {
 	return payload.Devices
 }
 
+type SpotifyURI string
+
+func (spotify *Spotify) SimpleSearch(q string, type_ string) SpotifyURI {
+	base, query := "https://api.spotify.com/v1/search", url.Values{}
+	query.Set("q", q)
+	query.Set("type", type_)
+	query.Set("limit", "1")
+	URL := utils.FormatString("%s?%s", base, query.Encode())
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	var payload map[string]struct {
+		Items []struct {
+			Uri SpotifyURI `json:"uri"`
+		} `json:"items"`
+	}
+	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
+	json.NewDecoder(resp.Body).Decode(&payload)
+
+	if data, ok := payload[type_+"s"]; ok {
+		return data.Items[0].Uri
+	}
+	return ""
+}
+
 type Track struct {
 	Album struct {
 		Name string `json:"name"`
 	} `json:"album"`
-	Name    string `json:"name"`
-	URI     string `json:"uri"`
+	Name    string     `json:"name"`
+	URI     SpotifyURI `json:"uri"`
 	Artists []struct {
 		Name string `json:"name"`
 	} `json:"artists"`
 }
-
 type StateInfo struct {
 	IsPlaying bool  `json:"is_playing"`
 	Track     Track `json:"item"`
@@ -289,4 +323,18 @@ func (spotify *Spotify) activeOrFirstDevice() Device {
 		}
 	}
 	return chosen
+}
+
+func handlePlaybackAPIErrorScenarios(operation string, r *http.Response) {
+	switch r.StatusCode {
+	case 204:
+		// ok
+	case 400:
+		body, _ := ioutil.ReadAll(r.Body)
+		log.Fatalf("%s operation encountered unexpected client error. INFO: %s", operation, body)
+	case 403:
+		log.Fatalf("%s operation encountered 403 Forbidden. Is this operation allowed right now?", operation)
+	case 404:
+		log.Fatalf("%s operation encountered 404 Not Found. Are there active devices?", operation)
+	}
 }

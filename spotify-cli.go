@@ -29,7 +29,7 @@ func main() {
 			Action:   handlePlay,
 			Aliases:  []string{"pl"},
 			Flags: []cli.Flag{
-				&cli.StringFlag{Name: "device", Aliases: []string{"d"}, Usage: "Name of device to play on i.e. 'iphone', 'mbp', etc."},
+				&cli.StringFlag{Name: "device", Aliases: []string{"d"}, Usage: "Play music on a device. Use any partial identifier i.e. 'mbp', '064a', 'smartphone', etc."},
 				&cli.StringFlag{Name: "track", Aliases: []string{"t"}, Usage: "A track to play."},
 				&cli.StringFlag{Name: "album", Aliases: []string{"m"}, Usage: "An album to play."},
 				&cli.StringFlag{Name: "artist", Aliases: []string{"r"}, Usage: "An artist to play."},
@@ -57,6 +57,21 @@ func main() {
 			Aliases:  []string{"pv"},
 			Action:   handlePrevTrack,
 		},
+		// Define Info category commands.
+		{
+			Name:     "devices",
+			Category: "Info",
+			Usage:    "Show playable devices.",
+			Aliases:  []string{"d", "dv"},
+			Action:   handleDevices,
+		},
+		{
+			Name:     "info",
+			Category: "Info",
+			Usage:    "Show what's currently playing and any track info.",
+			Aliases:  []string{"i"},
+			Action:   handleInfo,
+		},
 	}
 
 	err := app.Run(os.Args)
@@ -79,8 +94,12 @@ func handlePlay(c *cli.Context) error {
 	case device != "":
 		search := strings.ToLower(device)
 		for _, d := range Spotify.GetDevices() {
-			name, t := strings.ToLower(d.Name), strings.ToLower(d.Type)
-			if strings.Contains(name, search) || strings.Contains(t, search) {
+
+			id, name, t := strings.ToLower(d.ID), strings.ToLower(d.Name), strings.ToLower(d.Type)
+			if strings.Contains(id, search) ||
+				strings.Contains(name, search) ||
+				strings.Contains(t, search) {
+
 				Spotify.PlayOnDevice(d)
 				return nil
 			}
@@ -129,5 +148,28 @@ func handlePrevTrack(c *cli.Context) error {
 	Spotify := spotify.New(ConfigFile)
 	Spotify.Authorize()
 	Spotify.PreviousTrack()
+	return nil
+}
+
+func handleDevices(c *cli.Context) error {
+	Spotify := spotify.New(ConfigFile)
+	Spotify.Authorize()
+	fmt.Printf("[DeviceID]\t\t\t\t\tDeviceType\tName\n")
+	for _, d := range Spotify.GetDevices() {
+		fmt.Printf("[%s]\t%s\t%s\n", d.ID, d.Type, d.Name)
+	}
+	return nil
+}
+
+func handleInfo(c *cli.Context) error {
+	Spotify := spotify.New(ConfigFile)
+	Spotify.Authorize()
+	state := Spotify.CurrentState()
+	isPlayingDesc := "Stopped/Paused"
+	if state.IsPlaying {
+		isPlayingDesc = "Playing"
+	}
+	fmt.Printf("[Playback State]: %s\n", isPlayingDesc)
+	fmt.Printf("%s\t\t\t%s\t\t%s\t\t%s\n", isPlayingDesc, state.Track.Name, state.Track.Album, state.Track.Artists)
 	return nil
 }

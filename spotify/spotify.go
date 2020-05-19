@@ -128,7 +128,7 @@ func (spotify *Spotify) acquireTokens(code string, tokenType string) {
 		log.Fatalf("Bad value provided for tokenType arg to acquireTokens")
 	}
 
-	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, form)
+	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, form.Encode())
 	var payload map[string]string
 	json.NewDecoder(resp.Body).Decode(&payload)
 
@@ -168,6 +168,24 @@ func (spotify *Spotify) authorizeUser() string {
 }
 
 func (spotify *Spotify) PlayOn(device Device) {
+	URL := "https://api.spotify.com/v1/me/player/"
+	body := utils.FormatString(
+		`{"device_ids":["%s"], "play":true}`,
+		device.ID,
+	)
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+		"Content-Type":  "application/json",
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, body)
+	var payload map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&payload)
+	// TODO err handling
+}
+
+func (spotify *Spotify) Play() {
+	device := spotify.activeOrFirstDevice()
 	URL := utils.FormatString(
 		"https://api.spotify.com/v1/me/player/play?device_id=%s",
 		device.ID,
@@ -175,16 +193,9 @@ func (spotify *Spotify) PlayOn(device Device) {
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, nil)
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
-	// TODO err handling
-
-}
-
-func (spotify *Spotify) Play() {
-	device := spotify.activeOrFirstDevice()
-	spotify.PlayOn(device)
 }
 
 func (spotify *Spotify) Pause() {
@@ -192,7 +203,7 @@ func (spotify *Spotify) Pause() {
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, nil)
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
 	// TODO err handling
@@ -203,7 +214,7 @@ func (spotify *Spotify) NextTrack() {
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, nil)
+	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, "")
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
 	// TODO err handling
@@ -214,7 +225,7 @@ func (spotify *Spotify) PreviousTrack() {
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, nil)
+	resp, _ := utils.MakeHTTPRequest("POST", URL, headers, "")
 	var payload map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&payload)
 	// TODO err handling
@@ -233,7 +244,7 @@ func (spotify *Spotify) GetDevices() []Device {
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, nil)
+	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
 	var payload struct {
 		Devices []Device `json:"devices"`
 	}
@@ -262,7 +273,7 @@ func (spotify *Spotify) CurrentState() StateInfo {
 	headers := map[string]string{
 		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
 	}
-	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, nil)
+	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
 	var payload StateInfo
 	json.NewDecoder(resp.Body).Decode(&payload)
 	return payload

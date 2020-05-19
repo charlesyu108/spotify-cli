@@ -3,9 +3,9 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -75,12 +75,13 @@ func SaveJSON(fileName string, v interface{}) error {
 }
 
 // MakeHTTPRequest wraps http.NewRequest and client.Do to perform a request
-func MakeHTTPRequest(method string, URL string, headers map[string]string, formData url.Values) (*http.Response, error) {
+func MakeHTTPRequest(method string, URL string, headers map[string]string, body string) (*http.Response, error) {
 	client := new(http.Client)
-	if formData == nil {
-		formData = url.Values{}
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
 	}
-	req, _ := http.NewRequest(method, URL, strings.NewReader(formData.Encode()))
+	req, _ := http.NewRequest(method, URL, reader)
 
 	for k, v := range headers {
 		req.Header.Set(k, v)

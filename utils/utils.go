@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -71,6 +73,8 @@ func SaveJSON(fileName string, v interface{}) error {
 	if err != nil {
 		return err
 	}
+	file.Truncate(0)
+	file.Seek(0, 0)
 	return json.NewEncoder(file).Encode(v)
 }
 
@@ -87,4 +91,15 @@ func MakeHTTPRequest(method string, URL string, headers map[string]string, body 
 		req.Header.Set(k, v)
 	}
 	return client.Do(req)
+}
+
+// GetHomeDir gets the Current User's home directory.
+func GetHomeDir() string {
+	usr, _ := user.Current()
+	return usr.HomeDir
+}
+
+// GetProgFilesDir gets the spotify-cli Program Files directory
+func GetProgFilesDir() string {
+	return filepath.Join(GetHomeDir(), ".spotify-cli")
 }

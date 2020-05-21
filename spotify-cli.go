@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charlesyu108/spotify-cli/spotify"
+	"github.com/charlesyu108/spotify-cli/utils"
 	"github.com/urfave/cli/v2"
 )
 
@@ -14,6 +17,7 @@ import (
 const ConfigFile = "config.json"
 
 func main() {
+
 	app := &cli.App{
 		Name:                 "spotify-cli",
 		Usage:                "Use Spotify from the Command Line.",
@@ -25,7 +29,7 @@ func main() {
 		{
 			Name:     "play",
 			Category: "Playback",
-			Usage:    "Play/Resume playback.",
+			Usage:    "Play/Resume playback. Can also specify something to play and switch playback device.",
 			Action:   handlePlay,
 			Aliases:  []string{"pl"},
 			Flags: []cli.Flag{
@@ -57,20 +61,41 @@ func main() {
 			Aliases:  []string{"pv"},
 			Action:   handlePrevTrack,
 		},
+		{
+			Name:      "volume",
+			Category:  "Playback",
+			Usage:     "Adjust the volume.",
+			Aliases:   []string{"v"},
+			Action:    handleVolume,
+			ArgsUsage: "[volume-percent]",
+		},
 		// Define Info category commands.
 		{
 			Name:     "devices",
 			Category: "Info",
 			Usage:    "Show playable devices.",
-			Aliases:  []string{"d", "dv"},
+			Aliases:  []string{"d"},
 			Action:   handleDevices,
 		},
 		{
-			Name:     "info",
+			Name:     "state",
 			Category: "Info",
-			Usage:    "Show what's currently playing and any track info.",
-			Aliases:  []string{"i"},
+			Usage:    "Show what's currently playing and playback state.",
+			Aliases:  []string{"s"},
 			Action:   handleInfo,
+		},
+		// Define Config category commands.
+		{
+			Name:     "config",
+			Category: "Configuration",
+			Usage:    "Configure spotify-cli settings.",
+			Aliases:  []string{"c"},
+			Action:   handleConfig,
+			Flags: []cli.Flag{
+				&cli.StringFlag{Name: "set-app-client-id", Usage: "Set 'AppClientID'"},
+				&cli.StringFlag{Name: "set-app-client-secret", Usage: "Set 'AppClientSecret'"},
+				&cli.StringFlag{Name: "set-redirect-port", Usage: "Set 'RedirectPort'"},
+			},
 		},
 	}
 
@@ -80,8 +105,61 @@ func main() {
 	}
 }
 
+func getConfig() *spotify.ConfigT {
+
+	progFilesDir := utils.GetProgFilesDir()
+	// Make sure ~/.spotify-cli exists, create if not
+	_ = os.Mkdir(progFilesDir, 0700)
+	configPath := filepath.Join(progFilesDir, ConfigFile)
+
+	cfg, created := spotify.LoadConfig(configPath)
+	if created {
+		fmt.Printf("No config file was found, so one was created for you at `%s`.\n", configPath)
+		fmt.Printf("Edit the config file with your Spotify Application credentials or use the command `config` to help you.\n")
+		spotify.SaveConfig(cfg, configPath)
+		os.Exit(0)
+	}
+	return cfg
+}
+
+func handleConfig(c *cli.Context) error {
+	progFilesDir := utils.GetProgFilesDir()
+	// Make sure ~/.spotify-cli exists, create if not
+	_ = os.Mkdir(progFilesDir, 0700)
+	configPath := filepath.Join(progFilesDir, ConfigFile)
+	cfg, _ := spotify.LoadConfig(configPath)
+
+	id, secret, port := c.String("set-app-client-id"), c.String("set-app-client-secret"), c.String("set-redirect-port")
+
+	if id != "" {
+		cfg.AppClientID = id
+		fmt.Printf("Set AppClientID.\n")
+	}
+
+	if secret != "" {
+		cfg.AppClientSecret = secret
+		fmt.Printf("Set AppClientSecret.\n")
+	}
+
+	if port != "" {
+		cfg.RedirectPort = port
+		fmt.Printf("Set RedirectPort.\n")
+	}
+
+	spotify.SaveConfig(cfg, configPath)
+
+	if cfg.Validate() != nil {
+		fmt.Printf("Configs were saved but errors were found.\n")
+		fmt.Printf("For help setting these configs view the README.md or visit http://github.com/charlesyu108/spotify-cli.\n")
+		os.Exit(1)
+	}
+
+	return nil
+}
+
 func handlePlay(c *cli.Context) error {
-	Spotify := spotify.New(ConfigFile)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 
 	device := c.String("device")
@@ -131,28 +209,46 @@ func handlePlay(c *cli.Context) error {
 }
 
 func handlePause(c *cli.Context) error {
-	Spotify := spotify.New(ConfigFile)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.Pause()
 	return nil
 }
 
 func handleNextTrack(c *cli.Context) error {
-	Spotify := spotify.New(ConfigFile)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.NextTrack()
 	return nil
 }
 
 func handlePrevTrack(c *cli.Context) error {
-	Spotify := spotify.New(ConfigFile)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.PreviousTrack()
 	return nil
 }
 
+func handleVolume(c *cli.Context) error {
+	volArg := c.Args().Get(0)
+	if volArg == "" {
+		fmt.Printf("Positional argument `volume-percent` not provided.\n")
+		os.Exit(1)
+	}
+	vol, _ := strconv.Atoi(volArg)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
+	Spotify.Authorize()
+	Spotify.Volume(vol)
+	return nil
+}
+
 func handleDevices(c *cli.Context) error {
-	Spotify := spotify.New(ConfigFile)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	fmt.Printf("[DeviceID]\t\t\t\t\tDeviceType\tName\n")
 	for _, d := range Spotify.GetDevices() {
@@ -162,14 +258,25 @@ func handleDevices(c *cli.Context) error {
 }
 
 func handleInfo(c *cli.Context) error {
-	Spotify := spotify.New(ConfigFile)
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	state := Spotify.CurrentState()
-	isPlayingDesc := "Stopped/Paused"
+	isPlayingDesc := "Paused"
 	if state.IsPlaying {
 		isPlayingDesc = "Playing"
 	}
-	fmt.Printf("[Playback State]: %s\n", isPlayingDesc)
-	fmt.Printf("%s\t\t\t%s\t\t%s\t\t%s\n", isPlayingDesc, state.Track.Name, state.Track.Album, state.Track.Artists)
+
+	var trackInfo string
+	if state.Track.Name != "" {
+		artistNames := []string{}
+		for _, art := range state.Track.Artists {
+			artistNames = append(artistNames, art.Name)
+		}
+		artistsString := strings.Join(artistNames, ", ")
+		trackInfo = fmt.Sprintf(":: %s - %s", state.Track.Name, artistsString)
+	}
+
+	fmt.Printf("=> %s %s\n", isPlayingDesc, trackInfo)
 	return nil
 }

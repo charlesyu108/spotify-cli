@@ -8,14 +8,12 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/charlesyu108/spotify-cli/utils"
 )
-
-// tokenFile defines where Tokens should be cached.
-const tokenFile = ".tokens"
 
 // tokensT defines tokens and related info
 // for interfacing with the Spotify API
@@ -36,15 +34,16 @@ type authT struct {
 
 // Spotify represents an interface to the Spotify API
 type Spotify struct {
-	Config *ConfigT
-	tokens *tokensT
-	auth   *authT
+	Config    *ConfigT
+	tokens    *tokensT
+	tokenFile string
+	auth      *authT
 }
 
 // New produces creates and initializes a new Spotify
-func New(configFile string) Spotify {
-	cfg := LoadConfig(configFile)
+func New(cfg *ConfigT) Spotify {
 	spotify := Spotify{Config: cfg, tokens: new(tokensT)}
+	spotify.tokenFile = filepath.Join(utils.GetProgFilesDir(), ".tokens")
 	spotify.auth = &authT{
 		codeChan: make(chan string),
 		server: &http.Server{
@@ -109,12 +108,12 @@ func (spotify *Spotify) Authorize() {
 
 // loadSavedTokens loads the cached tokens file (if it exists) into memory
 func (spotify *Spotify) loadSavedTokens() {
-	utils.LoadJSON(tokenFile, spotify.tokens)
+	utils.LoadJSON(spotify.tokenFile, spotify.tokens)
 }
 
 // saveTokens saves the current tokens to a cached tokens file
 func (spotify *Spotify) saveTokens() {
-	err := utils.SaveJSON(tokenFile, spotify.tokens)
+	err := utils.SaveJSON(spotify.tokenFile, spotify.tokens)
 	utils.Check(err)
 }
 
@@ -279,6 +278,16 @@ func (spotify *Spotify) PreviousTrack() {
 	handlePlaybackAPIErrorScenarios("PreviousTrack", resp)
 }
 
+// Volume adjusts the playback volume to the desired percentage [0..100].
+func (spotify *Spotify) Volume(percent int) {
+	URL := fmt.Sprintf("https://api.spotify.com/v1/me/player/volume?volume_percent=%d", percent)
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
+	handlePlaybackAPIErrorScenarios("Volume", resp)
+}
+
 // Device describes a device
 type Device struct {
 	ID           string `json:"id"`
@@ -322,9 +331,11 @@ func (spotify *Spotify) SimpleSearch(q string, Type string) SpotifyURI {
 	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
 	json.NewDecoder(resp.Body).Decode(&payload)
 
-	if data, ok := payload[Type+"s"]; ok {
+	if data, ok := payload[Type+"s"]; ok && len(data.Items) > 0 {
 		return data.Items[0].Uri
 	}
+
+	log.Fatalf("SimpleSearch failed to find any '%s' matching search string '%s.'", Type, q)
 	return ""
 }
 

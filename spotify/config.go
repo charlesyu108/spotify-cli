@@ -1,6 +1,8 @@
 package spotify
 
 import (
+	"fmt"
+
 	"github.com/charlesyu108/spotify-cli/utils"
 )
 
@@ -12,10 +14,28 @@ type ConfigT struct {
 }
 
 // LoadConfig loads up the config
-func LoadConfig(configFile string) *ConfigT {
+// Returns a ConfigT and a boolean denoting if the config file was created.
+func LoadConfig(configFile string) (*ConfigT, bool) {
 	cfg := new(ConfigT)
-	utils.LoadJSON(configFile, cfg)
-	return cfg
+	err := utils.LoadJSON(configFile, cfg)
+	if err != nil {
+		return cfg, true
+	}
+	return cfg, false
+}
+
+// Validate that the config is good.
+func (c *ConfigT) Validate() error {
+	if c.AppClientID == "" {
+		return fmt.Errorf("AppClientID must not be empty")
+	}
+	if c.AppClientSecret == "" {
+		return fmt.Errorf("AppClientSecret must not be empty")
+	}
+	if c.RedirectPort == "" {
+		return fmt.Errorf("Redirect must not be empty")
+	}
+	return nil
 }
 
 // SaveConfig saves the Config defined by c to file.

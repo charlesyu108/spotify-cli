@@ -14,13 +14,14 @@ var validateTest = []struct {
 	{"AppClientID Only", &ConfigT{AppClientID: "test123"}, true},
 	{"AppClientSecret Only", &ConfigT{AppClientSecret: "test123"}, true},
 	{"RedirectPort Only", &ConfigT{RedirectPort: "test123"}, true},
+	{"RedirectPort and AppClientSecret ", &ConfigT{RedirectPort: "test123", AppClientSecret: "test123"}, true},
+	{"AppClientID and AppClientSecret ", &ConfigT{AppClientID: "test123", AppClientSecret: "test123"}, true},
 	{"Valid", &ConfigT{AppClientID: "test123", AppClientSecret: "test123", RedirectPort: "test123"}, false},
 }
 
 func TestValidateConfig(t *testing.T) {
 	for _, tt := range validateTest {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			err := tt.cfg.Validate()
 			errWasFound := err != nil
 			if errWasFound != tt.expectError {

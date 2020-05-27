@@ -2,6 +2,8 @@
 
 A system-agnostic command line utility for controlling playback on Spotify.
 
+![Spotify-CLI demo](assets/demo.gif)
+
 ## What can you do with spotify-cli?
 
 Play any of your favorite tracks / artists / albums / playlists

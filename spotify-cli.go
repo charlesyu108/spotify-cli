@@ -205,6 +205,8 @@ func handlePlay(c *cli.Context) error {
 		Spotify.Play()
 	}
 
+	defer displayTrackInfo(&Spotify)
+
 	return nil
 }
 
@@ -221,6 +223,7 @@ func handleNextTrack(c *cli.Context) error {
 	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.NextTrack()
+	defer displayTrackInfo(&Spotify)
 	return nil
 }
 
@@ -229,6 +232,7 @@ func handlePrevTrack(c *cli.Context) error {
 	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.PreviousTrack()
+	defer displayTrackInfo(&Spotify)
 	return nil
 }
 
@@ -261,7 +265,12 @@ func handleInfo(c *cli.Context) error {
 	cfg := getConfig()
 	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
-	state := Spotify.CurrentState()
+	displayTrackInfo(&Spotify)
+	return nil
+}
+
+func displayTrackInfo(spotify *spotify.Spotify) {
+	state := spotify.CurrentState()
 	isPlayingDesc := "Paused"
 	if state.IsPlaying {
 		isPlayingDesc = "Playing"
@@ -278,5 +287,4 @@ func handleInfo(c *cli.Context) error {
 	}
 
 	fmt.Printf("=> %s %s\n", isPlayingDesc, trackInfo)
-	return nil
 }

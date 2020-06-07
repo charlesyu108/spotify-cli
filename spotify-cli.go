@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charlesyu108/spotify-cli/spotify"
 	"github.com/charlesyu108/spotify-cli/utils"
@@ -67,7 +68,15 @@ func main() {
 			Usage:     "Adjust the volume.",
 			Aliases:   []string{"v"},
 			Action:    handleVolume,
-			ArgsUsage: "[volume-percent]",
+			ArgsUsage: "<volume-percent>",
+		},
+		{
+			Name:      "shuffle",
+			Category:  "Playback",
+			Usage:     "Toggle shuffle.",
+			Aliases:   []string{"s"},
+			Action:    handleShuffle,
+			ArgsUsage: "{on|off}",
 		},
 		// Define Info category commands.
 		{
@@ -78,10 +87,10 @@ func main() {
 			Action:   handleDevices,
 		},
 		{
-			Name:     "state",
+			Name:     "info",
 			Category: "Info",
 			Usage:    "Show what's currently playing and playback state.",
-			Aliases:  []string{"s"},
+			Aliases:  []string{"i"},
 			Action:   handleInfo,
 		},
 		// Define Config category commands.
@@ -205,7 +214,7 @@ func handlePlay(c *cli.Context) error {
 		Spotify.Play()
 	}
 
-	defer displayTrackInfo(&Spotify)
+	defer deferredTrackInfo(&Spotify)
 
 	return nil
 }
@@ -223,7 +232,7 @@ func handleNextTrack(c *cli.Context) error {
 	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.NextTrack()
-	defer displayTrackInfo(&Spotify)
+	defer deferredTrackInfo(&Spotify)
 	return nil
 }
 
@@ -232,7 +241,7 @@ func handlePrevTrack(c *cli.Context) error {
 	Spotify := spotify.New(cfg)
 	Spotify.Authorize()
 	Spotify.PreviousTrack()
-	defer displayTrackInfo(&Spotify)
+	defer deferredTrackInfo(&Spotify)
 	return nil
 }
 
@@ -287,4 +296,28 @@ func displayTrackInfo(spotify *spotify.Spotify) {
 	}
 
 	fmt.Printf("=> %s %s\n", isPlayingDesc, trackInfo)
+}
+
+func deferredTrackInfo(spotify *spotify.Spotify) {
+	time.Sleep(200 * time.Millisecond)
+	displayTrackInfo(spotify)
+}
+
+func handleShuffle(c *cli.Context) error {
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
+	Spotify.Authorize()
+
+	switch shuffleArg := c.Args().Get(0); shuffleArg {
+	case "on":
+		Spotify.ToggleShuffle(true)
+		fmt.Printf("Shuffle toggled on.\n")
+	case "off":
+		Spotify.ToggleShuffle(false)
+		fmt.Printf("Shuffle toggled off.\n")
+	default:
+		fmt.Printf("Positional argument `toggle` must be one of {on | off}.\n")
+		os.Exit(1)
+	}
+	return nil
 }

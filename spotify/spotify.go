@@ -367,6 +367,22 @@ func (spotify *Spotify) CurrentState() StateInfo {
 	var payload StateInfo
 	json.NewDecoder(resp.Body).Decode(&payload)
 	return payload
+
+}
+
+// ToggleShuffle toggles playback shuffle state.
+func (spotify *Spotify) ToggleShuffle(active bool) {
+	toggleState := "false"
+	if active {
+		toggleState = "true"
+	}
+
+	URL := fmt.Sprintf("https://api.spotify.com/v1/me/player/shuffle?state=%s", toggleState)
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
+	handlePlaybackAPIErrorScenarios("Shuffle", resp)
 }
 
 // activeOrFirstDevice returns the active device. If no active, return the first.

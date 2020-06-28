@@ -78,7 +78,7 @@ GOBIN=/usr/local/bin go install
 ### Step 4. Configure spotify-cli
 Finally, configure spotify-cli with:
 ```
-spotify-cli config --set-client-app-id <YOUR-CLIENT-APP-ID> --set-client-app-secret <YOUR-CLIENT-APP-SECRET> --set-redirect-port <YOUR-REDIRECT-PORT>
+spotify-cli config --set-app-client-id <YOUR-CLIENT-APP-ID> --set-app-client-secret <YOUR-CLIENT-APP-SECRET> --set-redirect-port <YOUR-REDIRECT-PORT>
 ```
 
 ✨TADA! You're ready to go. ✨

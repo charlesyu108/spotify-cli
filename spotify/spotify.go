@@ -179,7 +179,7 @@ func (spotify *Spotify) authorizeUser() string {
 	authURL := utils.FormatString(
 		"https://accounts.spotify.com/authorize?client_id=%s&"+
 			"response_type=code&redirect_uri=%s&"+
-			"scope=user-read-playback-state,user-modify-playback-state,user-read-currently-playing",
+			"scope=user-read-playback-state,user-modify-playback-state,user-read-currently-playing,user-library-modify",
 		spotify.Config.AppClientID,
 		"http://localhost:"+spotify.Config.RedirectPort,
 	)
@@ -383,6 +383,16 @@ func (spotify *Spotify) ToggleShuffle(active bool) {
 	}
 	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
 	handlePlaybackAPIErrorScenarios("Shuffle", resp)
+}
+
+// SaveTrack saves the current track to the user's library.
+func (spotify *Spotify) SaveTrack(trackID string) {
+	URL := fmt.Sprintf("https://api.spotify.com/v1/me/tracks?ids=%s", trackID)
+	headers := map[string]string{
+		"Authorization": "Bearer " + spotify.tokens.UserAccessToken,
+	}
+	resp, _ := utils.MakeHTTPRequest("PUT", URL, headers, "")
+	handlePlaybackAPIErrorScenarios("SaveTrack", resp)
 }
 
 // activeOrFirstDevice returns the active device. If no active, return the first.

@@ -93,6 +93,14 @@ func main() {
 			Aliases:  []string{"i"},
 			Action:   handleInfo,
 		},
+		// Define User Library management commands (These commands have side effects!).
+		{
+			Name:     "save",
+			Category: "Management",
+			Usage:    "Save the current playing track to user library.",
+			Aliases:  []string{"sv"},
+			Action:   handleSave,
+		},
 		// Define Config category commands.
 		{
 			Name:     "config",
@@ -298,6 +306,7 @@ func displayTrackInfo(spotify *spotify.Spotify) {
 	fmt.Printf("=> %s %s\n", isPlayingDesc, trackInfo)
 }
 
+// Use in a defer to chain track info display after a playback operation.
 func deferredTrackInfo(spotify *spotify.Spotify) {
 	time.Sleep(200 * time.Millisecond)
 	displayTrackInfo(spotify)
@@ -319,5 +328,29 @@ func handleShuffle(c *cli.Context) error {
 		fmt.Printf("Positional argument `toggle` must be one of {on | off}.\n")
 		os.Exit(1)
 	}
+	return nil
+}
+
+func handleSave(c *cli.Context) error {
+	cfg := getConfig()
+	Spotify := spotify.New(cfg)
+	Spotify.Authorize()
+
+	state := Spotify.CurrentState()
+	if !state.IsPlaying || state.Track.URI == "" {
+		fmt.Printf("Error to save. Playback is paused or nothing is playing.\n")
+		os.Exit(1)
+	}
+
+	trackID := strings.Replace(string(state.Track.URI), "spotify:track:", "", -1)
+	Spotify.SaveTrack(trackID)
+
+	artistNames := []string{}
+	for _, art := range state.Track.Artists {
+		artistNames = append(artistNames, art.Name)
+	}
+	artistsString := strings.Join(artistNames, ", ")
+	fmt.Printf("Saved track '%s - %s' to library.\n", state.Track.Name, artistsString)
+
 	return nil
 }

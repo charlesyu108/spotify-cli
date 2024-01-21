@@ -38,6 +38,7 @@ func main() {
 				&cli.StringFlag{Name: "track", Aliases: []string{"t"}, Usage: "A track to play."},
 				&cli.StringFlag{Name: "album", Aliases: []string{"m"}, Usage: "An album to play."},
 				&cli.StringFlag{Name: "artist", Aliases: []string{"r"}, Usage: "An artist to play."},
+				&cli.StringFlag{Name: "uri", Aliases: []string{"u"}, Usage: "Anything, by using spotify uri.(format: spotify:<type>:<id>)"},
 				&cli.StringFlag{Name: "playlist", Aliases: []string{"l"}, Usage: "An playlist to play."},
 			},
 		},
@@ -184,6 +185,7 @@ func handlePlay(c *cli.Context) error {
 	album := c.String("album")
 	artist := c.String("artist")
 	playlist := c.String("playlist")
+	uri:= c.String("uri")
 
 	switch true {
 	case device != "":
@@ -216,6 +218,9 @@ func handlePlay(c *cli.Context) error {
 
 	case playlist != "":
 		uri := Spotify.SimpleSearch(playlist, "playlist")
+		Spotify.PlayURI(uri)
+
+	case uri != "":
 		Spotify.PlayURI(uri)
 
 	default:

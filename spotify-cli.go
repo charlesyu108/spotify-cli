@@ -221,7 +221,8 @@ func handlePlay(c *cli.Context) error {
 		Spotify.PlayURI(uri)
 
 	case uri != "":
-		Spotify.PlayURI(uri)
+		suri:= SpotifyURI(uri)
+		Spotify.PlayURI(suri)
 
 	default:
 		Spotify.Play()

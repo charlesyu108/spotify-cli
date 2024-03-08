@@ -12,6 +12,7 @@ spotify-cli play --track "the less i know the better"
 spotify-cli play --artist "still woozy"
 spotify-cli play --album "testing"
 spotify-cli play --playlist "release radar"
+spotify-cli play --uri "spotify:album:27ftYHLeunzcSzb33Wk1hf"
 ```
 
 Navigate playback

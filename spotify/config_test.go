@@ -36,7 +36,7 @@ func TestLoadConfig(t *testing.T) {
 	t.Run("When proper file exists", func(t *testing.T) {
 		file := ".tmp"
 		fptr, _ := os.Create(file)
-		fptr.WriteString(`{"AppClientID": "test123", "AppClientSecret": "test123", "RedirectPort": "test123"}\n`)
+		_, _ = fptr.WriteString(`{"AppClientID": "test123", "AppClientSecret": "test123", "RedirectPort": "test123"}`)
 		fptr.Close()
 
 		cfg, created := LoadConfig(file)
@@ -82,12 +82,15 @@ func TestSaveConfig(t *testing.T) {
 
 	t.Run("Saves config to a file that did exist", func(t *testing.T) {
 		file := ".tmpasdf123"
-		fptr, err := os.Create(file)
+		_, err := os.Create(file)
+		if err != nil {
+			t.FailNow()
+		}
 
 		cfg := &ConfigT{AppClientID: "test123", AppClientSecret: "test123", RedirectPort: "test123"}
 		SaveConfig(cfg, file)
 
-		fptr, err = os.Open(file)
+		fptr, err := os.Open(file)
 		fptr.Close()
 
 		if err != nil {

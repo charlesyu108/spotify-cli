@@ -54,7 +54,11 @@ func New(cfg *ConfigT) Spotify {
 	// Register Auth Redirect Handler
 	http.HandleFunc("/", spotify.handleAuthorizeUserRedirect)
 	// Start auth server
-	go spotify.auth.server.ListenAndServe()
+	go func() {
+		if err := spotify.auth.server.ListenAndServe(); err != nil {
+			log.Fatalf("Failed to start auth server: %v", err)
+		}
+	}()
 
 	return spotify
 }
@@ -64,9 +68,13 @@ func New(cfg *ConfigT) Spotify {
 func (spotify *Spotify) handleAuthorizeUserRedirect(w http.ResponseWriter, req *http.Request) {
 	userCode := req.FormValue("code")
 	if userCode != "" {
-		w.Write([]byte("Success!"))
+		if _, err := w.Write([]byte("Success!")); err != nil {
+			log.Fatalf("Failed to write success message: %v", err)
+		}
 	} else {
-		w.Write([]byte("User Authorization failed"))
+		if _, err := w.Write([]byte("User Authorization failed")); err != nil {
+			log.Fatalf("Failed to write failure message: %v", err)
+		}
 	}
 	spotify.auth.codeChan <- userCode
 }
@@ -108,7 +116,9 @@ func (spotify *Spotify) Authorize() {
 
 // loadSavedTokens loads the cached tokens file (if it exists) into memory
 func (spotify *Spotify) loadSavedTokens() {
-	utils.LoadJSON(spotify.tokenFile, spotify.tokens)
+	if err := utils.LoadJSON(spotify.tokenFile, spotify.tokens); err != nil {
+		log.Fatalf("Failed to load tokens from %s: %v", spotify.tokenFile, err)
+	}
 }
 
 // saveTokens saves the current tokens to a cached tokens file
@@ -152,7 +162,9 @@ func (spotify *Spotify) acquireTokens(code string, tokenType string) {
 		log.Fatalf("Error encountered during Authorization. INFO: %s", body)
 	}
 	var payload map[string]string
-	json.NewDecoder(resp.Body).Decode(&payload)
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		log.Fatalf("Failed to decode response body: %v", err)
+	}
 
 	expiration := time.Now().Unix() + int64(3600)
 	switch tokenType {
@@ -307,7 +319,9 @@ func (spotify *Spotify) GetDevices() []Device {
 	var payload struct {
 		Devices []Device `json:"devices"`
 	}
-	json.NewDecoder(resp.Body).Decode(&payload)
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		log.Fatalf("Failed to decode response body: %v", err)
+	}
 	return payload.Devices
 }
 
@@ -329,7 +343,9 @@ func (spotify *Spotify) SimpleSearch(q string, Type string) SpotifyURI {
 		} `json:"items"`
 	}
 	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
-	json.NewDecoder(resp.Body).Decode(&payload)
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		log.Fatalf("Failed to decode response body: %v", err)
+	}
 
 	if data, ok := payload[Type+"s"]; ok && len(data.Items) > 0 {
 		return data.Items[0].Uri
@@ -365,7 +381,9 @@ func (spotify *Spotify) CurrentState() StateInfo {
 	}
 	resp, _ := utils.MakeHTTPRequest("GET", URL, headers, "")
 	var payload StateInfo
-	json.NewDecoder(resp.Body).Decode(&payload)
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		log.Fatalf("Failed to decode response body: %v", err)
+	}
 	return payload
 
 }

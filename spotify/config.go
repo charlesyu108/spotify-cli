@@ -2,6 +2,7 @@ package spotify
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/charlesyu108/spotify-cli/utils"
 )
@@ -40,5 +41,7 @@ func (c *ConfigT) Validate() error {
 
 // SaveConfig saves the Config defined by c to file.
 func SaveConfig(c *ConfigT, configFile string) {
-	utils.SaveJSON(configFile, c)
+	if err := utils.SaveJSON(configFile, c); err != nil {
+		log.Fatalf("Failed to save config to %s: %v", configFile, err)
+	}
 }

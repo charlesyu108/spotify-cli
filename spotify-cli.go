@@ -40,6 +40,7 @@ func main() {
 				&cli.StringFlag{Name: "artist", Aliases: []string{"r"}, Usage: "An artist to play."},
 				&cli.StringFlag{Name: "uri", Aliases: []string{"u"}, Usage: "Anything, by using spotify uri.(format: spotify:<type>:<id>)"},
 				&cli.StringFlag{Name: "playlist", Aliases: []string{"l"}, Usage: "An playlist to play."},
+				&cli.StringFlag{Name: "podcast", Aliases: []string{"p"}, Usage: "A podcast or episode to play."},
 			},
 		},
 		{
@@ -110,9 +111,9 @@ func main() {
 			Aliases:  []string{"c"},
 			Action:   handleConfig,
 			Flags: []cli.Flag{
-				&cli.StringFlag{Name: "set-app-client-id", Usage: "Set 'AppClientID'"},
-				&cli.StringFlag{Name: "set-app-client-secret", Usage: "Set 'AppClientSecret'"},
-				&cli.StringFlag{Name: "set-redirect-port", Usage: "Set 'RedirectPort'"},
+				&cli.StringFlag{Name: "client-id", Usage: "Set 'AppClientID'"},
+				&cli.StringFlag{Name: "client-secret", Usage: "Set 'AppClientSecret'"},
+				&cli.StringFlag{Name: "port", Usage: "Set 'RedirectPort'"},
 			},
 		},
 	}
@@ -185,7 +186,8 @@ func handlePlay(c *cli.Context) error {
 	album := c.String("album")
 	artist := c.String("artist")
 	playlist := c.String("playlist")
-	uri:= c.String("uri")
+	uri := c.String("uri")
+	podcast := c.String("podcast")
 
 	switch true {
 	case device != "":
@@ -220,8 +222,12 @@ func handlePlay(c *cli.Context) error {
 		uri := Spotify.SimpleSearch(playlist, "playlist")
 		Spotify.PlayURI(uri)
 
+	case podcast != "":
+		uri := Spotify.SimpleSearch(podcast, "show")
+		Spotify.PlayURI(uri)
+
 	case uri != "":
-		suri:= spotify.SpotifyURI(uri)
+		suri := spotify.SpotifyURI(uri)
 		Spotify.PlayURI(suri)
 
 	default:
